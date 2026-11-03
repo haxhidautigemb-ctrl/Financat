@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="sq">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}</style>
+</head>
+<body>
+<title>Financat e Mia</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one narrow column built for a phone. Result number first, quick-add form next, then where the money went, then the month's entries. */
+:root {
+  --bg: #F1F3F0;
+  --surface: #FFFFFF;
+  --ink: #17231F;
+  --muted: #5D6B65;
+  --line: #DCE2DD;
+  --accent: #23399B;
+  --accent-ink: #FFFFFF;
+  --income: #1B7A4F;
+  --expense: #B83F29;
+  --track: #E4E9E5;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1412; --surface: #171E1B; --ink: #E7EEEA; --muted: #98A8A0; --line: #28332F;
+    --accent: #93A5FF; --accent-ink: #0E1230; --income: #5FCB93; --expense: #F08A74; --track: #25302B;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1412; --surface: #171E1B; --ink: #E7EEEA; --muted: #98A8A0; --line: #28332F;
+  --accent: #93A5FF; --accent-ink: #0E1230; --income: #5FCB93; --expense: #F08A74; --track: #25302B;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.45;
+  padding-block: 18px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.num { font-variant-numeric: tabular-nums; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: -0.01em; }
+.months { display: flex; align-items: center; gap: 4px; }
+.months button { width: 40px; height: 40px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; font-size: 1.2rem; line-height: 1; }
+.months span { min-width: 120px; text-align: center; font-weight: 600; }
+
+.hero { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+.label { font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.big { font-family: var(--font-display); font-weight: 700; font-size: clamp(2.4rem, 12vw, 3.4rem); letter-spacing: -0.03em; line-height: 1; overflow-wrap: anywhere; }
+.big.neg { color: var(--expense); }
+.bar { height: 10px; background: var(--track); border-radius: 99px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.bar.over > i { background: var(--expense); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pair div { min-width: 0; }
+.pair b { display: block; font-size: 1.15rem; font-weight: 600; overflow-wrap: anywhere; }
+.pair .in b { color: var(--income); }
+.pair .out b { color: var(--expense); }
+.hint { margin: 0; font-size: 0.82rem; color: var(--muted); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--track); border-radius: 12px; padding: 4px; gap: 4px; }
+.seg button { border: 0; background: transparent; padding: 10px; border-radius: 9px; font-weight: 600; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field label { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+.field input, .field select { width: 100%; min-width: 0; height: 48px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.field .amount { font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; height: 58px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.err { margin: 0; color: var(--expense); font-size: 0.9rem; min-height: 1.2em; }
+.add { height: 52px; border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 1.05rem; }
+.add:active { transform: translateY(1px); }
+
+.groups { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.groups > li { border-top: 1px solid var(--line); }
+.groups > li:first-child { border-top: 0; }
+.ghead { width: 100%; display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border: 0; background: none; text-align: left; }
+.ghead .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.ghead .name { font-weight: 500; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ghead .chev { display: inline-block; width: 0.6em; height: 0.6em; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); flex: none; }
+.ghead[aria-expanded="true"] .chev { transform: rotate(45deg); }
+.ghead .sum { color: var(--muted); white-space: nowrap; }
+.ghead .bar { display: block; width: 100%; }
+.bar.inc > i { background: var(--income); }
+.items { list-style: none; margin: 0; padding: 0 0 8px; }
+.items li { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px dashed var(--line); }
+
+.banner { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--track); font-size: 0.9rem; }
+.day { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+.what { min-width: 0; }
+.what b { display: block; font-weight: 500; }
+.what small { display: block; color: var(--muted); overflow-wrap: anywhere; }
+.amt { text-align: right; font-weight: 600; }
+.amt.in { color: var(--income); }
+.amt.out { color: var(--expense); }
+.del { display: inline-flex; gap: 6px; margin-top: 4px; justify-content: flex-end; }
+.del button { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 4px 10px; font-size: 0.8rem; }
+.del .yes { background: var(--expense); border-color: var(--expense); color: #fff; }
+.link { border: 0; background: none; color: var(--muted); font-size: 0.8rem; padding: 4px 0 0; text-decoration: underline; }
+.empty { color: var(--muted); margin: 0; }
+.total { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-top: 14px; border-top: 2px solid var(--ink); font-weight: 600; }
+.total b { font-family: var(--font-display); font-size: 1.35rem; overflow-wrap: anywhere; text-align: right; }
+.total b.in { color: var(--income); }
+.total b.out { color: var(--expense); }
+.status { text-align: center; font-size: 0.8rem; color: var(--muted); margin: 4px 0 0; }
+@media (prefers-reduced-motion: no-preference) { .bar > i { transition: width .35s ease; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">Financat e mia</div>
+    <div class="months">
+      <button type="button" id="prev" aria-label="Muaji i kaluar">‹</button>
+      <span id="monthName" class="num"></span>
+      <button type="button" id="next" aria-label="Muaji tjetër">›</button>
+    </div>
+  </header>
+
+  <section class="hero" aria-live="polite">
+    <div class="label">Të mbetura këtë muaj</div>
+    <div class="big num" id="left">0,00 €</div>
+    <div class="bar" id="bar"><i style="width:0%"></i></div>
+    <div class="pair">
+      <div class="in"><div class="label">Të ardhura</div><b class="num" id="sumIn">0,00 €</b></div>
+      <div class="out"><div class="label">Shpenzime</div><b class="num" id="sumOut">0,00 €</b></div>
+    </div>
+    <p class="hint" id="heroHint"></p>
+  </section>
+
+  <form class="card" id="form" novalidate>
+    <h2>Shto një shënim</h2>
+    <div class="seg" role="group" aria-label="Lloji">
+      <button type="button" id="tExp" aria-pressed="true">Shpenzim</button>
+      <button type="button" id="tInc" aria-pressed="false">Të ardhura</button>
+    </div>
+    <div class="field">
+      <label for="amount">Shuma (€)</label>
+      <input class="amount num" id="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="cat">Kategoria</label>
+        <select id="cat"></select>
+      </div>
+      <div class="field">
+        <label for="date">Data</label>
+        <input id="date" type="date">
+      </div>
+    </div>
+    <div class="field">
+      <label for="note">Shënim (nëse do)</label>
+      <input id="note" type="text" maxlength="60" autocomplete="off" placeholder="p.sh. Supermarket">
+    </div>
+    <p class="err" id="err" role="alert"></p>
+    <button class="add" type="submit">Shto</button>
+  </form>
+
+  <section class="card">
+    <h2>Ku shkuan paratë</h2>
+    <p class="banner" id="demoBanner" hidden>Këto janë shembuj. Kur shton shënimin e parë, zhduken.</p>
+    <ul class="groups" id="groups"></ul>
+    <p class="empty" id="emptyMsg" hidden>Ky muaj është bosh. Shto shpenzimin e parë më sipër.</p>
+    <div class="total" id="totalRow" hidden><span>Totali i muajit</span><b class="num" id="total"></b></div>
+  </section>
+
+  <p class="status" id="status"></p>
+</div>
+
+<script>
+(function () {
+  var MONTHS = ['Janar','Shkurt','Mars','Prill','Maj','Qershor','Korrik','Gusht','Shtator','Tetor','Nëntor','Dhjetor'];
+  var EXP = ['Ushqim','Qira dhe faturat','Kredi','Fëmijët','Transport','Shëndeti','Veshje','Shtëpia','Argëtim','Tjetër'];
+  var INC = ['Rrogë','Tjetër'];
+  var LS = 'financat-e-mia-v1';
+
+  var state = { tx: [] };
+  var type = 'exp';
+  var confirmId = null;
+  var openGroups = {};
+  var ref = null;
+  var saving = false, dirty = false;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  var nf = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  var money = function (n) { return nf.format(n) + ' €'; };
+  var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+  var today = function () { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+  var view = today().slice(0, 7);
+
+  function mirror() { try { localStorage.setItem(LS, JSON.stringify(state.tx)); } catch (e) {} }
+  function loadLocal() {
+    try { var v = JSON.parse(localStorage.getItem(LS) || '[]'); if (Array.isArray(v)) state.tx = v; } catch (e) {}
+  }
+
+  function setStatus(s) {
+    var t = { saving: 'Po ruhet…', saved: 'Të gjitha janë ruajtur. Shënimet e tua i sheh vetëm ti.', local: 'Ruhet vetëm në këtë telefon.', error: 'Nuk u ruajt. Provo përsëri pas pak. Nëse vazhdon, kontrollo që ke të drejtën "Contributor".' };
+    $('status').textContent = t[s] || '';
+  }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  async function save() {
+    mirror();
+    if (!ref) { setStatus('local'); return; }
+    dirty = true;
+    if (saving) return;
+    saving = true; setStatus('saving');
+    var retried = false;
+    while (dirty) {
+      dirty = false;
+      try { await ref.set({ tx: state.tx, updatedAt: Date.now() }); retried = false; }
+      catch (e) {
+        if (e && e.code === 'unavailable' && !retried) { retried = true; await sleep(800 + Math.random() * 800); dirty = true; continue; }
+        saving = false; setStatus('error'); return;
+      }
+    }
+    saving = false; setStatus('saved');
+  }
+
+  function demoRows() {
+    var m = view + '-';
+    return [
+      { id: 'd1', type: 'inc', amount: 650, cat: 'Rrogë', note: 'Rroga e muajit', date: m + '01' },
+      { id: 'd2', type: 'exp', amount: 180, cat: 'Qira dhe faturat', note: 'Qiraja', date: m + '03' },
+      { id: 'd3', type: 'exp', amount: 42.5, cat: 'Ushqim', note: 'Supermarket', date: m + '05' },
+      { id: 'd4', type: 'exp', amount: 25, cat: 'Fëmijët', note: 'Pelena', date: m + '07' },
+      { id: 'd5', type: 'exp', amount: 20, cat: 'Transport', note: 'Naftë', date: m + '09' }
+    ];
+  }
+
+  function render() {
+    var demo = state.tx.length === 0;
+    var all = demo ? demoRows() : state.tx;
+    var rows = all.filter(function (t) { return t.date.slice(0, 7) === view; })
+      .sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (a.id < b.id ? 1 : -1); });
+
+    var inc = 0, out = 0, byCat = {};
+    rows.forEach(function (t) {
+      if (t.type === 'inc') inc += t.amount;
+      else { out += t.amount; byCat[t.cat] = (byCat[t.cat] || 0) + t.amount; }
+    });
+    var left = inc - out;
+
+    var y = view.slice(0, 4), mi = parseInt(view.slice(5, 7), 10) - 1;
+    $('monthName').textContent = MONTHS[mi] + ' ' + y;
+    $('left').textContent = money(left);
+    $('left').classList.toggle('neg', left < 0);
+    $('sumIn').textContent = '+ ' + money(inc);
+    $('sumOut').textContent = '− ' + money(out);
+
+    var pct = inc > 0 ? Math.min(100, (out / inc) * 100) : (out > 0 ? 100 : 0);
+    $('bar').classList.toggle('over', out > inc);
+    $('bar').firstElementChild.style.width = pct + '%';
+    $('heroHint').textContent = inc > 0
+      ? (out > inc ? 'Ke shpenzuar më shumë se ke fituar këtë muaj.' : 'Ke shpenzuar ' + Math.round(pct) + '% të të ardhurave.')
+      : (out > 0 ? 'Shto të ardhurat e muajit për të parë sa të mbeten.' : '');
+
+    var cats = Object.keys(byCat).sort(function (a, b) { return byCat[b] - byCat[a]; });
+    var groups = cats.map(function (c) {
+      return { key: 'e:' + c, name: c, total: byCat[c], pct: out > 0 ? (byCat[c] / out) * 100 : 0, kind: 'out',
+        items: rows.filter(function (t) { return t.type === 'exp' && t.cat === c; }) };
+    });
+    if (inc > 0) groups.push({ key: 'i', name: 'Të ardhura', total: inc, pct: 100, kind: 'inc',
+      items: rows.filter(function (t) { return t.type === 'inc'; }) });
+
+    $('groups').innerHTML = groups.map(function (g) {
+      var isOpen = !!openGroups[g.key];
+      var items = g.items.map(function (t) {
+        var day = parseInt(t.date.slice(8, 10), 10) + ' ' + MONTHS[parseInt(t.date.slice(5, 7), 10) - 1].slice(0, 3);
+        var del = '';
+        if (!demo) {
+          del = confirmId === t.id
+            ? '<div class="del"><button type="button" class="yes" data-act="yes" data-id="' + t.id + '">Fshije</button><button type="button" data-act="no">Jo</button></div>'
+            : '<button type="button" class="link" data-act="ask" data-id="' + t.id + '">Fshi</button>';
+        }
+        return '<li><div class="day num">' + day + '</div>' +
+          '<div class="what">' + (t.note ? '<b>' + esc(t.note) + '</b>' : '<small>Pa shënim</small>') + '</div>' +
+          '<div><div class="amt num ' + (t.type === 'inc' ? 'in' : 'out') + '">' + (t.type === 'inc' ? '+' : '−') + ' ' + money(t.amount) + '</div>' + del + '</div></li>';
+      }).join('');
+      return '<li><button type="button" class="ghead" data-act="toggle" data-key="' + esc(g.key) + '" aria-expanded="' + isOpen + '">' +
+        '<span class="row"><span class="name"><i class="chev"></i>' + esc(g.name) + '</span>' +
+        '<span class="sum num">' + money(g.total) + (g.kind === 'out' ? ' · ' + Math.round(g.pct) + '%' : '') + '</span></span>' +
+        '<span class="bar ' + g.kind + '"><i style="width:' + g.pct.toFixed(1) + '%"></i></span></button>' +
+        (isOpen ? '<ul class="items">' + items + '</ul>' : '') + '</li>';
+    }).join('');
+
+    $('demoBanner').hidden = !demo;
+    $('emptyMsg').hidden = rows.length > 0;
+    $('totalRow').hidden = rows.length === 0;
+    $('total').textContent = (left < 0 ? '− ' : '+ ') + money(Math.abs(left));
+    $('total').className = 'num ' + (left < 0 ? 'out' : 'in');
+  }
+
+  function fillCats() {
+    var list = type === 'exp' ? EXP : INC;
+    $('cat').innerHTML = list.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+  }
+  function setType(t) {
+    type = t;
+    $('tExp').setAttribute('aria-pressed', t === 'exp');
+    $('tInc').setAttribute('aria-pressed', t === 'inc');
+    fillCats();
+  }
+  function parseAmount(s) {
+    s = String(s).replace(/\s|€/g, '');
+    if (s.indexOf(',') > -1) s = s.replace(/\./g, '').replace(',', '.');
+    var n = parseFloat(s);
+    return isFinite(n) ? Math.round(n * 100) / 100 : NaN;
+  }
+  function shiftMonth(d) {
+    var y = parseInt(view.slice(0, 4), 10), m = parseInt(view.slice(5, 7), 10) - 1 + d;
+    var dt = new Date(y, m, 1);
+    view = dt.getFullYear() + '-' + pad(dt.getMonth() + 1);
+    confirmId = null; render();
+  }
+
+  $('tExp').onclick = function () { setType('exp'); };
+  $('tInc').onclick = function () { setType('inc'); };
+  $('prev').onclick = function () { shiftMonth(-1); };
+  $('next').onclick = function () { shiftMonth(1); };
+
+  $('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var amount = parseAmount($('amount').value);
+    var date = $('date').value || today();
+    if (!(amount > 0)) { $('err').textContent = 'Shkruaj një shumë më të madhe se 0, p.sh. 12,50'; $('amount').focus(); return; }
+    $('err').textContent = '';
+    var t = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      type: type, amount: amount, cat: $('cat').value,
+      note: $('note').value.trim(), date: date
+    };
+    state.tx = state.tx.concat([t]);
+    view = date.slice(0, 7);
+    $('amount').value = ''; $('note').value = '';
+    $('amount').focus();
+    confirmId = null;
+    render(); save();
+  });
+
+  $('groups').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var act = b.getAttribute('data-act');
+    if (act === 'toggle') { var k = b.getAttribute('data-key'); openGroups[k] = !openGroups[k]; confirmId = null; render(); }
+    else if (act === 'ask') { confirmId = b.getAttribute('data-id'); render(); }
+    else if (act === 'no') { confirmId = null; render(); }
+    else if (act === 'yes') {
+      var id = b.getAttribute('data-id');
+      state.tx = state.tx.filter(function (t) { return t.id !== id; });
+      confirmId = null; render(); save();
+    }
+  });
+
+  async function connect() {
+    try {
+      if (!window.claude || !window.claude.use) { setStatus('local'); return; }
+      var results = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+      var db = results[0], user = results[1];
+      var uid = user ? await user.id() : null;
+      if (!db || !uid) { setStatus('local'); return; }
+      ref = db.doc('data/users/' + uid + '/ledger');
+      ref.onSnapshot(function (snap) {
+        if (snap.metadata.hasPendingWrites || saving) return;
+        if (snap.exists) {
+          var d = snap.data();
+          if (d && Array.isArray(d.tx)) { state.tx = d.tx.map(function (t) { return Object.assign({}, t); }); mirror(); render(); setStatus('saved'); }
+        } else if (!snap.metadata.fromCache) {
+          if (state.tx.length) save(); else setStatus('saved');
+        }
+      }, function () { ref = null; setStatus('local'); });
+    } catch (e) { ref = null; setStatus('local'); }
+  }
+
+  loadLocal();
+  $('date').value = today();
+  fillCats();
+  render();
+  connect();
+})();
+</script>
+</body>
+</html>
