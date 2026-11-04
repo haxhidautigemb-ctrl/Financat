@@ -410,7 +410,8 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
     $('formTitle').textContent = t ? 'Ndrysho shënimin' : 'Shto një shënim';
     $('submitBtn').textContent = t ? 'Ruaj ndryshimin' : 'Shto';
     $('cancelEdit').hidden = !t;
-    $('recRow').hidden = !!t;
+    $('recRow').hidden = !!(t && t.recId);
+    $('rec').checked = false;
     if (t) {
       setType(t.type);
       $('cat').value = t.cat;
@@ -460,10 +461,17 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
     $('err').textContent = '';
     var uid = function () { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); };
     if (editingId) {
-      state.tx = state.tx.map(function (x) {
-        return x.id === editingId ? Object.assign({}, x, { type: type, amount: amount, cat: $('cat').value, note: $('note').value.trim(), date: date }) : x;
-      });
+      var cur = state.tx.filter(function (x) { return x.id === editingId; })[0];
+      var upd = { type: type, amount: amount, cat: $('cat').value, note: $('note').value.trim(), date: date };
+      if (cur && !cur.recId && $('rec').checked) {
+        var nr = { id: uid(), type: type, amount: amount, cat: upd.cat, note: upd.note, day: parseInt(date.slice(8, 10), 10), start: date.slice(0, 7) };
+        state.rec = state.rec.concat([nr]);
+        upd.id = 'r_' + nr.id + '_' + nr.start;
+        upd.recId = nr.id;
+      }
+      state.tx = state.tx.map(function (x) { return x.id === editingId ? Object.assign({}, x, upd) : x; });
       setEditing(null);
+      applyRecurring();
     } else if ($('rec').checked) {
       state.rec = state.rec.concat([{ id: uid(), type: type, amount: amount, cat: $('cat').value, note: $('note').value.trim(), day: parseInt(date.slice(8, 10), 10), start: date.slice(0, 7) }]);
       applyRecurring();
