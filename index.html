@@ -117,6 +117,22 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
 .total b { font-family: var(--font-display); font-size: 1.35rem; overflow-wrap: anywhere; text-align: right; }
 .total b.in { color: var(--income); }
 .total b.out { color: var(--expense); }
+.check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 0.95rem; }
+.check input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
+.ghost { height: 48px; border: 1px solid var(--line); background: var(--bg); border-radius: 12px; font-weight: 600; }
+.cancel { height: 44px; border: 0; background: none; color: var(--muted); text-decoration: underline; }
+.goalrow { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+.goalrow input { width: 100%; min-width: 0; height: 48px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.goalrow button { height: 48px; padding: 0 16px; border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.goalnums { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.bar.goal > i { background: var(--income); }
+.recs { list-style: none; margin: 0; padding: 0; }
+.recs li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.recs li:first-child { border-top: 0; }
+.recs .meta { min-width: 0; }
+.recs .meta b { display: block; font-weight: 500; overflow-wrap: anywhere; }
+.recs .meta small { color: var(--muted); }
+.acts { display: flex; gap: 14px; justify-content: flex-end; }
 .status { text-align: center; font-size: 0.8rem; color: var(--muted); margin: 4px 0 0; }
 @media (prefers-reduced-motion: no-preference) { .bar > i { transition: width .35s ease; } }
 </style>
@@ -143,7 +159,7 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
   </section>
 
   <form class="card" id="form" novalidate>
-    <h2>Shto një shënim</h2>
+    <h2 id="formTitle">Shto një shënim</h2>
     <div class="seg" role="group" aria-label="Lloji">
       <button type="button" id="tExp" aria-pressed="true">Shpenzim</button>
       <button type="button" id="tInc" aria-pressed="false">Të ardhura</button>
@@ -166,8 +182,10 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
       <label for="note">Shënim (nëse do)</label>
       <input id="note" type="text" maxlength="60" autocomplete="off" placeholder="p.sh. Supermarket">
     </div>
+    <label class="check" id="recRow"><input type="checkbox" id="rec"> Përsëritet çdo muaj (p.sh. kredia, qiraja)</label>
     <p class="err" id="err" role="alert"></p>
-    <button class="add" type="submit">Shto</button>
+    <button class="add" type="submit" id="submitBtn">Shto</button>
+    <button class="cancel" type="button" id="cancelEdit" hidden>Anulo ndryshimin</button>
   </form>
 
   <section class="card">
@@ -178,19 +196,44 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
     <div class="total" id="totalRow" hidden><span>Totali i muajit</span><b class="num" id="total"></b></div>
   </section>
 
+  <section class="card" id="goalCard">
+    <h2>Synimi i kursimit</h2>
+    <div id="goalProg" hidden>
+      <div class="goalnums"><span class="num" id="goalSaved"></span><span class="num" id="goalOf"></span></div>
+      <div class="bar goal"><i id="goalBar" style="width:0%"></i></div>
+    </div>
+    <p class="hint" id="goalHint"></p>
+    <div class="field">
+      <label for="goal">Sa dëshiron të kursesh në muaj (€)</label>
+      <div class="goalrow">
+        <input id="goal" class="num" type="text" inputmode="decimal" autocomplete="off" placeholder="p.sh. 100">
+        <button type="button" id="saveGoal">Ruaj</button>
+      </div>
+    </div>
+    <button class="ghost" type="button" id="addSave">Shto një kursim</button>
+  </section>
+
+  <section class="card" id="recCard" hidden>
+    <h2>Pagesa që përsëriten</h2>
+    <ul class="recs" id="recList"></ul>
+    <p class="hint">Shtohen vetë çdo muaj. Ndalimi nuk i fshin shënimet e kaluara.</p>
+  </section>
+
   <p class="status" id="status"></p>
 </div>
 
 <script>
 (function () {
   var MONTHS = ['Janar','Shkurt','Mars','Prill','Maj','Qershor','Korrik','Gusht','Shtator','Tetor','Nëntor','Dhjetor'];
-  var EXP = ['Ushqim','Qira dhe faturat','Kredi','Fëmijët','Transport','Shëndeti','Veshje','Shtëpia','Argëtim','Tjetër'];
+  var EXP = ['Ushqim','Qira dhe faturat','Kredi','Kursime','Fëmijët','Transport','Shëndeti','Veshje','Shtëpia','Argëtim','Tjetër'];
   var INC = ['Rrogë','Tjetër'];
   var LS = 'financat-e-mia-v1';
 
-  var state = { tx: [] };
+  var state = { tx: [], rec: [], skip: [], goal: 0 };
   var type = 'exp';
   var confirmId = null;
+  var confirmRec = null;
+  var editingId = null;
   var openGroups = {};
   var ref = null;
   var saving = false, dirty = false;
@@ -203,9 +246,39 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
   var today = function () { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
   var view = today().slice(0, 7);
 
-  function mirror() { try { localStorage.setItem(LS, JSON.stringify(state.tx)); } catch (e) {} }
+  function mirror() { try { localStorage.setItem(LS, JSON.stringify({ tx: state.tx, rec: state.rec, skip: state.skip, goal: state.goal })); } catch (e) {} }
   function loadLocal() {
-    try { var v = JSON.parse(localStorage.getItem(LS) || '[]'); if (Array.isArray(v)) state.tx = v; } catch (e) {}
+    try {
+      var v = JSON.parse(localStorage.getItem(LS) || '[]');
+      if (Array.isArray(v)) state.tx = v;
+      else if (v && Array.isArray(v.tx)) {
+        state.tx = v.tx;
+        state.rec = Array.isArray(v.rec) ? v.rec : [];
+        state.skip = Array.isArray(v.skip) ? v.skip : [];
+        state.goal = typeof v.goal === 'number' ? v.goal : 0;
+      }
+    } catch (e) {}
+  }
+
+  /* Për çdo pagesë që përsëritet shton shënimin e çdo muaji, nga muaji i parë deri tani. Id-ja është e njëjtë, ndaj nuk dyfishohet. */
+  function applyRecurring() {
+    var changed = false;
+    var nowM = today().slice(0, 7);
+    state.rec.forEach(function (r) {
+      var end = r.start > nowM ? r.start : nowM;
+      var m = r.start, guard = 0;
+      while (m <= end && guard++ < 600) {
+        var id = 'r_' + r.id + '_' + m;
+        var y = parseInt(m.slice(0, 4), 10), mo = parseInt(m.slice(5, 7), 10);
+        if (state.skip.indexOf(id) < 0 && !state.tx.some(function (t) { return t.id === id; })) {
+          var dim = new Date(y, mo, 0).getDate();
+          state.tx.push({ id: id, recId: r.id, type: r.type, amount: r.amount, cat: r.cat, note: r.note || '', date: m + '-' + pad(Math.min(r.day, dim)) });
+          changed = true;
+        }
+        m = mo === 12 ? (y + 1) + '-01' : y + '-' + pad(mo + 1);
+      }
+    });
+    return changed;
   }
 
   function setStatus(s) {
@@ -223,7 +296,7 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
     var retried = false;
     while (dirty) {
       dirty = false;
-      try { await ref.set({ tx: state.tx, updatedAt: Date.now() }); retried = false; }
+      try { await ref.set({ tx: state.tx, rec: state.rec, skip: state.skip, goal: state.goal, updatedAt: Date.now() }); retried = false; }
       catch (e) {
         if (e && e.code === 'unavailable' && !retried) { retried = true; await sleep(800 + Math.random() * 800); dirty = true; continue; }
         saving = false; setStatus('error'); return;
@@ -286,10 +359,10 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
         if (!demo) {
           del = confirmId === t.id
             ? '<div class="del"><button type="button" class="yes" data-act="yes" data-id="' + t.id + '">Fshije</button><button type="button" data-act="no">Jo</button></div>'
-            : '<button type="button" class="link" data-act="ask" data-id="' + t.id + '">Fshi</button>';
+            : '<div class="acts"><button type="button" class="link" data-act="edit" data-id="' + t.id + '">Ndrysho</button><button type="button" class="link" data-act="ask" data-id="' + t.id + '">Fshi</button></div>';
         }
         return '<li><div class="day num">' + day + '</div>' +
-          '<div class="what">' + (t.note ? '<b>' + esc(t.note) + '</b>' : '<small>Pa shënim</small>') + '</div>' +
+          '<div class="what">' + (t.note ? '<b>' + esc(t.note) + '</b>' : '') + (t.recId ? '<small>Çdo muaj</small>' : (!t.note ? '<small>Pa shënim</small>' : '')) + '</div>' +
           '<div><div class="amt num ' + (t.type === 'inc' ? 'in' : 'out') + '">' + (t.type === 'inc' ? '+' : '−') + ' ' + money(t.amount) + '</div>' + del + '</div></li>';
       }).join('');
       return '<li><button type="button" class="ghead" data-act="toggle" data-key="' + esc(g.key) + '" aria-expanded="' + isOpen + '">' +
@@ -304,6 +377,50 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
     $('totalRow').hidden = rows.length === 0;
     $('total').textContent = (left < 0 ? '− ' : '+ ') + money(Math.abs(left));
     $('total').className = 'num ' + (left < 0 ? 'out' : 'in');
+
+    /* Synimi i kursimit: kursimet e muajit janë shënimet në kategorinë "Kursime". */
+    var saved = demo ? 0 : (byCat['Kursime'] || 0);
+    var goal = state.goal || 0;
+    $('goalProg').hidden = !(goal > 0);
+    if (goal > 0) {
+      var gp = Math.min(100, (saved / goal) * 100);
+      $('goalSaved').textContent = 'Kursyer: ' + money(saved);
+      $('goalOf').textContent = 'Synimi: ' + money(goal);
+      $('goalBar').style.width = gp.toFixed(1) + '%';
+      $('goalHint').textContent = saved >= goal ? 'Synimin e këtij muaji e arrite.' : 'Të mungojnë ' + money(goal - saved) + ' për synimin e muajit.';
+    } else {
+      $('goalHint').textContent = 'Vendos një shumë dhe shto kursimet sa herë që heq pak mënjanë.';
+    }
+    if (document.activeElement !== $('goal')) $('goal').value = goal > 0 ? String(goal).replace('.', ',') : '';
+
+    /* Pagesat që përsëriten */
+    $('recCard').hidden = state.rec.length === 0;
+    $('recList').innerHTML = state.rec.map(function (r) {
+      var act = confirmRec === r.id
+        ? '<div class="del"><button type="button" class="yes" data-act="recyes" data-id="' + r.id + '">Ndalo</button><button type="button" data-act="recno">Jo</button></div>'
+        : '<button type="button" class="link" data-act="recask" data-id="' + r.id + '">Ndalo</button>';
+      return '<li><div class="meta"><b>' + esc(r.note || r.cat) + '</b><small>' + esc(r.cat) + ' · çdo muaj më ' + r.day + '</small></div>' +
+        '<div><div class="amt num ' + (r.type === 'inc' ? 'in' : 'out') + '">' + (r.type === 'inc' ? '+' : '−') + ' ' + money(r.amount) + '</div>' + act + '</div></li>';
+    }).join('');
+  }
+
+  function setEditing(t) {
+    editingId = t ? t.id : null;
+    $('formTitle').textContent = t ? 'Ndrysho shënimin' : 'Shto një shënim';
+    $('submitBtn').textContent = t ? 'Ruaj ndryshimin' : 'Shto';
+    $('cancelEdit').hidden = !t;
+    $('recRow').hidden = !!t;
+    if (t) {
+      setType(t.type);
+      $('cat').value = t.cat;
+      $('amount').value = String(t.amount).replace('.', ',');
+      $('date').value = t.date;
+      $('note').value = t.note || '';
+      $('err').textContent = '';
+      $('form').scrollIntoView({ block: 'start' });
+    } else {
+      $('amount').value = ''; $('note').value = ''; $('date').value = today();
+    }
   }
 
   function fillCats() {
@@ -340,17 +457,54 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
     var date = $('date').value || today();
     if (!(amount > 0)) { $('err').textContent = 'Shkruaj një shumë më të madhe se 0, p.sh. 12,50'; $('amount').focus(); return; }
     $('err').textContent = '';
-    var t = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      type: type, amount: amount, cat: $('cat').value,
-      note: $('note').value.trim(), date: date
-    };
-    state.tx = state.tx.concat([t]);
+    var uid = function () { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); };
+    if (editingId) {
+      state.tx = state.tx.map(function (x) {
+        return x.id === editingId ? Object.assign({}, x, { type: type, amount: amount, cat: $('cat').value, note: $('note').value.trim(), date: date }) : x;
+      });
+      setEditing(null);
+    } else if ($('rec').checked) {
+      state.rec = state.rec.concat([{ id: uid(), type: type, amount: amount, cat: $('cat').value, note: $('note').value.trim(), day: parseInt(date.slice(8, 10), 10), start: date.slice(0, 7) }]);
+      applyRecurring();
+      $('rec').checked = false;
+      $('amount').value = ''; $('note').value = '';
+    } else {
+      state.tx = state.tx.concat([{ id: uid(), type: type, amount: amount, cat: $('cat').value, note: $('note').value.trim(), date: date }]);
+      $('amount').value = ''; $('note').value = '';
+    }
     view = date.slice(0, 7);
-    $('amount').value = ''; $('note').value = '';
     $('amount').focus();
     confirmId = null;
     render(); save();
+  });
+
+  $('cancelEdit').onclick = function () { setEditing(null); };
+
+  $('saveGoal').onclick = function () {
+    var raw = $('goal').value.trim();
+    var g = raw === '' ? 0 : parseAmount(raw);
+    if (!(g >= 0)) { $('goalHint').textContent = 'Shkruaj një shumë, p.sh. 100'; return; }
+    state.goal = g;
+    $('goal').blur();
+    render(); save();
+  };
+  $('addSave').onclick = function () {
+    setEditing(null);
+    setType('exp');
+    $('cat').value = 'Kursime';
+    $('form').scrollIntoView({ block: 'start' });
+    $('amount').focus();
+  };
+
+  $('recList').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var act = b.getAttribute('data-act'), id = b.getAttribute('data-id');
+    if (act === 'recask') { confirmRec = id; render(); }
+    else if (act === 'recno') { confirmRec = null; render(); }
+    else if (act === 'recyes') {
+      state.rec = state.rec.filter(function (r) { return r.id !== id; });
+      confirmRec = null; render(); save();
+    }
   });
 
   $('groups').addEventListener('click', function (e) {
@@ -359,8 +513,16 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
     if (act === 'toggle') { var k = b.getAttribute('data-key'); openGroups[k] = !openGroups[k]; confirmId = null; render(); }
     else if (act === 'ask') { confirmId = b.getAttribute('data-id'); render(); }
     else if (act === 'no') { confirmId = null; render(); }
+    else if (act === 'edit') {
+      var eid = b.getAttribute('data-id');
+      var et = state.tx.filter(function (t) { return t.id === eid; })[0];
+      if (et) { confirmId = null; setEditing(et); }
+    }
     else if (act === 'yes') {
       var id = b.getAttribute('data-id');
+      var gone = state.tx.filter(function (t) { return t.id === id; })[0];
+      if (gone && gone.recId && state.skip.indexOf(id) < 0) state.skip.push(id);
+      if (editingId === id) setEditing(null);
       state.tx = state.tx.filter(function (t) { return t.id !== id; });
       confirmId = null; render(); save();
     }
@@ -378,15 +540,24 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
         if (snap.metadata.hasPendingWrites || saving) return;
         if (snap.exists) {
           var d = snap.data();
-          if (d && Array.isArray(d.tx)) { state.tx = d.tx.map(function (t) { return Object.assign({}, t); }); mirror(); render(); setStatus('saved'); }
+          if (d && Array.isArray(d.tx)) {
+            state.tx = d.tx.map(function (t) { return Object.assign({}, t); });
+            state.rec = Array.isArray(d.rec) ? d.rec.map(function (r) { return Object.assign({}, r); }) : [];
+            state.skip = Array.isArray(d.skip) ? d.skip.slice() : [];
+            state.goal = typeof d.goal === 'number' ? d.goal : 0;
+            var ch = applyRecurring();
+            mirror(); render(); setStatus('saved');
+            if (ch) save();
+          }
         } else if (!snap.metadata.fromCache) {
-          if (state.tx.length) save(); else setStatus('saved');
+          if (state.tx.length || state.rec.length || state.goal) save(); else setStatus('saved');
         }
       }, function () { ref = null; setStatus('local'); });
     } catch (e) { ref = null; setStatus('local'); }
   }
 
   loadLocal();
+  if (applyRecurring()) mirror();
   $('date').value = today();
   fillCats();
   render();
