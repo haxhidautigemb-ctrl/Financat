@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<style>body{margin:0}</style>
+<style>body{margin:0}[hidden]{display:none!important}</style>
 </head>
 <body>
 <title>Financat e Mia</title>
@@ -12,31 +12,24 @@
 <style>
 /* Layout: one narrow column built for a phone. Result number first, quick-add form next, then where the money went, then the month's entries. */
 :root {
-  --bg: #F1F3F0;
+  --bg: #EAF2FF;
   --surface: #FFFFFF;
-  --ink: #17231F;
-  --muted: #5D6B65;
-  --line: #DCE2DD;
-  --accent: #23399B;
+  --ink: #12213A;
+  --muted: #5B6B8A;
+  --line: #E0E9F8;
+  --accent: #3358F5;
   --accent-ink: #FFFFFF;
-  --income: #1B7A4F;
-  --expense: #B83F29;
-  --track: #E4E9E5;
+  --income: #0A9E63;
+  --expense: #E0414A;
+  --track: #E3ECFC;
+  --hero-a: #3358F5;
+  --hero-b: #1FC2B3;
+  --shadow: 0 8px 24px rgba(40, 72, 150, 0.10);
+  color-scheme: light;
   --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0F1412; --surface: #171E1B; --ink: #E7EEEA; --muted: #98A8A0; --line: #28332F;
-    --accent: #93A5FF; --accent-ink: #0E1230; --income: #5FCB93; --expense: #F08A74; --track: #25302B;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #0F1412; --surface: #171E1B; --ink: #E7EEEA; --muted: #98A8A0; --line: #28332F;
-  --accent: #93A5FF; --accent-ink: #0E1230; --income: #5FCB93; --expense: #F08A74; --track: #25302B;
-  color-scheme: dark;
-}
+/* Pamje e çelët me qëllim, pavarësisht nga cilësimi i telefonit. */
 * { box-sizing: border-box; }
 body {
   background: var(--bg); color: var(--ink);
@@ -57,7 +50,15 @@ button { cursor: pointer; }
 .months button { width: 40px; height: 40px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; font-size: 1.2rem; line-height: 1; }
 .months span { min-width: 120px; text-align: center; font-weight: 600; }
 
-.hero { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+.hero { background: linear-gradient(135deg, var(--hero-a), var(--hero-b)); color: #fff; border-radius: 24px; padding: 22px 20px 20px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 12px 28px rgba(51, 88, 245, 0.28); }
+.hero .label { color: rgba(255, 255, 255, 0.82); }
+.hero .big.neg { color: #FFE1DD; }
+.hero .bar { background: rgba(255, 255, 255, 0.28); }
+.hero .bar > i { background: #fff; }
+.hero .bar.over > i { background: #FFC2BA; }
+.hero .pair .in b { color: #D6FFEE; }
+.hero .pair .out b { color: #FFE3DE; }
+.hero .hint { color: rgba(255, 255, 255, 0.85); }
 .label { font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .big { font-family: var(--font-display); font-weight: 700; font-size: clamp(2.4rem, 12vw, 3.4rem); letter-spacing: -0.03em; line-height: 1; overflow-wrap: anywhere; }
 .big.neg { color: var(--expense); }
@@ -71,20 +72,21 @@ button { cursor: pointer; }
 .pair .out b { color: var(--expense); }
 .hint { margin: 0; font-size: 0.82rem; color: var(--muted); }
 
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.card { background: var(--surface); border-radius: 22px; padding: 20px 18px; display: flex; flex-direction: column; gap: 14px; box-shadow: var(--shadow); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
 h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
 
 .seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--track); border-radius: 12px; padding: 4px; gap: 4px; }
 .seg button { border: 0; background: transparent; padding: 10px; border-radius: 9px; font-weight: 600; color: var(--muted); }
-.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); box-shadow: 0 4px 10px rgba(51, 88, 245, 0.3); }
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field label { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
-.field input, .field select { width: 100%; min-width: 0; height: 48px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.field input, .field select { width: 100%; min-width: 0; height: 48px; padding: 0 12px; border: 1.5px solid var(--line); border-radius: 14px; background: #F7FAFF; }
 .field .amount { font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; height: 58px; }
 .row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .field input[type="date"] { -webkit-appearance: none; appearance: none; display: block; max-width: 100%; text-align: left; line-height: 48px; }
 .err { margin: 0; color: var(--expense); font-size: 0.9rem; min-height: 1.2em; }
-.add { height: 52px; border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 1.05rem; }
+.add { height: 54px; border: 0; border-radius: 16px; background: linear-gradient(135deg, var(--hero-a), var(--hero-b)); color: #fff; font-weight: 600; font-size: 1.05rem; box-shadow: 0 8px 18px rgba(51, 88, 245, 0.28); }
 .add:active { transform: translateY(1px); }
 
 .groups { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -229,6 +231,8 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
   var EXP = ['Ushqim','Qira dhe faturat','Kredi','Kursime','Fëmijët','Transport','Shëndeti','Veshje','Shtëpia','Argëtim','Tjetër'];
   var INC = ['Rrogë','Tjetër'];
   var LS = 'financat-e-mia-v1';
+  var CAT_COLORS = { 'Ushqim': '#F5A524', 'Qira dhe faturat': '#6C63FF', 'Kredi': '#E0414A', 'Kursime': '#0A9E63', 'Fëmijët': '#F0529C', 'Transport': '#1FA2E8', 'Shëndeti': '#13B5A5', 'Veshje': '#A259E6', 'Shtëpia': '#F97B3D', 'Argëtim': '#8BC34A', 'Tjetër': '#8A97B2' };
+  function colorOf(g) { return g.kind === 'inc' ? 'var(--income)' : (CAT_COLORS[g.name] || '#8A97B2'); }
 
   var state = { tx: [], rec: [], skip: [], goal: 0 };
   var type = 'exp';
@@ -367,9 +371,9 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
           '<div><div class="amt num ' + (t.type === 'inc' ? 'in' : 'out') + '">' + (t.type === 'inc' ? '+' : '−') + ' ' + money(t.amount) + '</div>' + del + '</div></li>';
       }).join('');
       return '<li><button type="button" class="ghead" data-act="toggle" data-key="' + esc(g.key) + '" aria-expanded="' + isOpen + '">' +
-        '<span class="row"><span class="name"><i class="chev"></i>' + esc(g.name) + '</span>' +
+        '<span class="row"><span class="name"><i class="chev"></i><i class="dot" style="background:' + colorOf(g) + '"></i>' + esc(g.name) + '</span>' +
         '<span class="sum num">' + money(g.total) + (g.kind === 'out' ? ' · ' + Math.round(g.pct) + '%' : '') + '</span></span>' +
-        '<span class="bar ' + g.kind + '"><i style="width:' + g.pct.toFixed(1) + '%"></i></span></button>' +
+        '<span class="bar ' + g.kind + '"><i style="width:' + g.pct.toFixed(1) + '%;background:' + colorOf(g) + '"></i></span></button>' +
         (isOpen ? '<ul class="items">' + items + '</ul>' : '') + '</li>';
     }).join('');
 
