@@ -1,5 +1,5 @@
 /* Financat e mia: e ruan faqen në telefon që të hapet edhe pa internet. */
-var CACHE = 'financat-v1';
+var CACHE = 'financat-v2';
 var SHELL = ['./', './index.html'];
 
 self.addEventListener('install', function (e) {
@@ -31,8 +31,8 @@ self.addEventListener('fetch', function (e) {
     return;
   }
 
-  /* Shkronjat nga Google: i ruan një herë dhe i përdor pa internet. */
-  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+  /* Shkronjat nga Google dhe programi i leximit të fotos: i ruan një herë dhe i përdor pa internet. */
+  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com' || url.hostname === 'cdn.jsdelivr.net') {
     e.respondWith(
       caches.match(req).then(function (hit) {
         return hit || fetch(req).then(function (res) {
