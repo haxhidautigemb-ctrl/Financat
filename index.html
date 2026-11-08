@@ -139,6 +139,16 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
 .recs .meta b { display: block; font-weight: 500; overflow-wrap: anywhere; }
 .recs .meta small { color: var(--muted); }
 .acts { display: flex; gap: 14px; justify-content: flex-end; }
+.photorow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.photobtn { display: inline-flex; align-items: center; gap: 8px; padding: 0 16px; }
+.photobtn svg { width: 20px; height: 20px; flex: none; }
+.thumbwrap { display: inline-flex; align-items: center; gap: 10px; }
+.thumb { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; box-shadow: 0 2px 8px rgba(40, 72, 150, 0.2); }
+.what .link { display: block; text-align: left; padding-top: 2px; }
+.viewer { position: fixed; inset: 0; z-index: 50; background: rgba(10, 20, 40, 0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.viewer img { max-width: 100%; max-height: 76vh; border-radius: 14px; }
+.viewer p { margin: 0; color: #fff; }
+.viewer-close { height: 48px; padding: 0 28px; border: 0; border-radius: 14px; background: #fff; color: #12213A; font-weight: 600; }
 .status { text-align: center; font-size: 0.8rem; color: var(--muted); margin: 4px 0 0; }
 @media (prefers-reduced-motion: no-preference) { .bar > i { transition: width .35s ease; } }
 </style>
@@ -173,6 +183,17 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
     <div class="field">
       <label for="amount">Shuma (€)</label>
       <input class="amount num" id="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00">
+    </div>
+    <div class="photorow">
+      <button type="button" class="ghost photobtn" id="photoBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.6-2.4h6.8L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.4"/></svg>
+        <span id="photoBtnTxt">Shto foto</span>
+      </button>
+      <span class="thumbwrap" id="thumbWrap" hidden>
+        <img id="thumb" class="thumb" alt="Fotoja e zgjedhur">
+        <button type="button" class="link" id="thumbDel">Hiq</button>
+      </span>
+      <input type="file" id="photoIn" accept="image/*" hidden>
     </div>
     <div class="row2">
       <div class="field">
@@ -225,6 +246,12 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
     <p class="hint">Shtohen vetë çdo muaj. Ndalimi nuk i fshin shënimet e kaluara.</p>
   </section>
 
+  <div class="viewer" id="viewer" role="dialog" aria-label="Fotoja" hidden>
+    <img id="viewerImg" alt="Fotoja e shënimit">
+    <p id="viewerMsg" hidden>Kjo foto nuk është në këtë telefon.</p>
+    <button type="button" class="viewer-close" id="viewerClose">Mbyll</button>
+  </div>
+
   <p class="status" id="status"></p>
 </div>
 
@@ -242,6 +269,7 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
   var confirmId = null;
   var confirmRec = null;
   var editingId = null;
+  var pendingPhoto = null, removePhoto = false, thumbUrl = null, viewUrl = null;
   var openGroups = {};
   var ref = null;
   var saving = false, dirty = false;
@@ -293,6 +321,67 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
     var t = { saving: 'Po ruhet…', saved: 'Të gjitha janë ruajtur. Shënimet e tua i sheh vetëm ti.', local: 'Ruhet vetëm në këtë telefon.', error: 'Nuk u ruajt. Provo përsëri pas pak. Nëse vazhdon, kontrollo që ke të drejtën "Contributor".' };
     $('status').textContent = t[s] || '';
   }
+  /* Fotot ruhen vetëm në këtë telefon (IndexedDB), jo bashkë me shënimet. */
+  var idbP = null;
+  function idb() {
+    if (idbP) return idbP;
+    idbP = new Promise(function (res, rej) {
+      try {
+        var r = indexedDB.open('financat-photos', 1);
+        r.onupgradeneeded = function () { r.result.createObjectStore('p'); };
+        r.onsuccess = function () { res(r.result); };
+        r.onerror = function () { rej(r.error); };
+      } catch (e) { rej(e); }
+    });
+    return idbP;
+  }
+  function photoOp(mode, fn, fallback) {
+    return idb().then(function (db) {
+      return new Promise(function (res) {
+        var t = db.transaction('p', mode), out = fallback;
+        var req = fn(t.objectStore('p'));
+        if (req) req.onsuccess = function () { out = req.result === undefined ? fallback : req.result; };
+        t.oncomplete = function () { res(mode === 'readonly' ? out : true); };
+        t.onerror = t.onabort = function () { res(fallback); };
+      });
+    }).catch(function () { return fallback; });
+  }
+  function photoPut(id, blob) { return photoOp('readwrite', function (s) { s.put(blob, id); }, false); }
+  function photoGet(id) { return photoOp('readonly', function (s) { return s.get(id); }, null); }
+  function photoDel(id) { return photoOp('readwrite', function (s) { s.delete(id); }, false); }
+
+  function shrink(file) {
+    return new Promise(function (res, rej) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var w = img.naturalWidth, h = img.naturalHeight, k = Math.min(1, 1400 / Math.max(w, h));
+        var c = document.createElement('canvas');
+        c.width = Math.round(w * k); c.height = Math.round(h * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        c.toBlob(function (b) { if (b) res(b); else rej(new Error('blob')); }, 'image/jpeg', 0.78);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); rej(new Error('img')); };
+      img.src = url;
+    });
+  }
+  function showThumb(blob) {
+    if (thumbUrl) { URL.revokeObjectURL(thumbUrl); thumbUrl = null; }
+    if (blob) thumbUrl = URL.createObjectURL(blob);
+    $('thumb').src = thumbUrl || '';
+    $('thumbWrap').hidden = !blob;
+    $('photoBtnTxt').textContent = blob ? 'Ndrysho foton' : 'Shto foto';
+  }
+  function clearPhotoUI() { pendingPhoto = null; removePhoto = false; showThumb(null); $('photoIn').value = ''; }
+  async function openPhoto(id) {
+    var b = await photoGet(id);
+    if (viewUrl) { URL.revokeObjectURL(viewUrl); viewUrl = null; }
+    if (b) { viewUrl = URL.createObjectURL(b); $('viewerImg').src = viewUrl; }
+    $('viewerImg').hidden = !b;
+    $('viewerMsg').hidden = !!b;
+    $('viewer').hidden = false;
+  }
+
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
   async function save() {
@@ -370,7 +459,7 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
             : '<div class="acts"><button type="button" class="link" data-act="edit" data-id="' + t.id + '">Ndrysho</button><button type="button" class="link" data-act="ask" data-id="' + t.id + '">Fshi</button></div>';
         }
         return '<li><div class="day num">' + day + '</div>' +
-          '<div class="what">' + (t.note ? '<b>' + esc(t.note) + '</b>' : '') + (t.recId ? '<small>Çdo muaj</small>' : (!t.note ? '<small>Pa shënim</small>' : '')) + '</div>' +
+          '<div class="what">' + (t.note ? '<b>' + esc(t.note) + '</b>' : '') + (t.recId ? '<small>Çdo muaj</small>' : (!t.note ? '<small>Pa shënim</small>' : '')) + (t.photo ? '<button type="button" class="link" data-act="photo" data-id="' + t.id + '">Shiko foton</button>' : '') + '</div>' +
           '<div><div class="amt num ' + (t.type === 'inc' ? 'in' : 'out') + '">' + (t.type === 'inc' ? '+' : '−') + ' ' + money(t.amount) + '</div>' + del + '</div></li>';
       }).join('');
       return '<li><button type="button" class="ghead" data-act="toggle" data-key="' + esc(g.key) + '" aria-expanded="' + isOpen + '">' +
@@ -419,6 +508,8 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
     $('cancelEdit').hidden = !t;
     $('recRow').hidden = !!(t && t.recId);
     $('rec').checked = false;
+    clearPhotoUI();
+    if (t && t.photo) photoGet(t.id).then(function (b) { if (b && editingId === t.id && !pendingPhoto && !removePhoto) showThumb(b); });
     if (t) {
       setType(t.type);
       $('cat').value = t.cat;
@@ -460,39 +551,76 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
   $('prev').onclick = function () { shiftMonth(-1); };
   $('next').onclick = function () { shiftMonth(1); };
 
-  $('form').addEventListener('submit', function (e) {
+  $('form').addEventListener('submit', async function (e) {
     e.preventDefault();
     var amount = parseAmount($('amount').value);
     var date = $('date').value || today();
     if (!(amount > 0)) { $('err').textContent = 'Shkruaj një shumë më të madhe se 0, p.sh. 12,50'; $('amount').focus(); return; }
     $('err').textContent = '';
     var uid = function () { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); };
+    var photoFailed = false;
     if (editingId) {
       var cur = state.tx.filter(function (x) { return x.id === editingId; })[0];
       var upd = { type: type, amount: amount, cat: $('cat').value, note: $('note').value.trim(), date: date };
+      var newId = editingId;
       if (cur && !cur.recId && $('rec').checked) {
         var nr = { id: uid(), type: type, amount: amount, cat: upd.cat, note: upd.note, day: parseInt(date.slice(8, 10), 10), start: date.slice(0, 7) };
         state.rec = state.rec.concat([nr]);
-        upd.id = 'r_' + nr.id + '_' + nr.start;
+        newId = 'r_' + nr.id + '_' + nr.start;
+        upd.id = newId;
         upd.recId = nr.id;
+      }
+      var hadPhoto = !!(cur && cur.photo);
+      if (pendingPhoto) {
+        if (await photoPut(newId, pendingPhoto)) { upd.photo = true; if (newId !== editingId) await photoDel(editingId); }
+        else photoFailed = true;
+      } else if (removePhoto && hadPhoto) {
+        await photoDel(editingId); upd.photo = false;
+      } else if (hadPhoto && newId !== editingId) {
+        var old = await photoGet(editingId);
+        if (old && await photoPut(newId, old)) await photoDel(editingId); else upd.photo = false;
       }
       state.tx = state.tx.map(function (x) { return x.id === editingId ? Object.assign({}, x, upd) : x; });
       setEditing(null);
       applyRecurring();
     } else if ($('rec').checked) {
-      state.rec = state.rec.concat([{ id: uid(), type: type, amount: amount, cat: $('cat').value, note: $('note').value.trim(), day: parseInt(date.slice(8, 10), 10), start: date.slice(0, 7) }]);
+      var rid = uid();
+      state.rec = state.rec.concat([{ id: rid, type: type, amount: amount, cat: $('cat').value, note: $('note').value.trim(), day: parseInt(date.slice(8, 10), 10), start: date.slice(0, 7) }]);
       applyRecurring();
+      if (pendingPhoto) {
+        var firstId = 'r_' + rid + '_' + date.slice(0, 7);
+        if (await photoPut(firstId, pendingPhoto)) state.tx = state.tx.map(function (x) { return x.id === firstId ? Object.assign({}, x, { photo: true }) : x; });
+        else photoFailed = true;
+      }
       $('rec').checked = false;
       $('amount').value = ''; $('note').value = '';
     } else {
-      state.tx = state.tx.concat([{ id: uid(), type: type, amount: amount, cat: $('cat').value, note: $('note').value.trim(), date: date }]);
+      var ent = { id: uid(), type: type, amount: amount, cat: $('cat').value, note: $('note').value.trim(), date: date };
+      if (pendingPhoto) { if (await photoPut(ent.id, pendingPhoto)) ent.photo = true; else photoFailed = true; }
+      state.tx = state.tx.concat([ent]);
       $('amount').value = ''; $('note').value = '';
     }
+    clearPhotoUI();
+    if (photoFailed) $('err').textContent = 'Shënimi u ruajt, por fotoja jo. Provo përsëri me "Ndrysho".';
     view = date.slice(0, 7);
     $('amount').focus();
     confirmId = null;
     render(); save();
   });
+
+  $('photoBtn').onclick = function () { $('photoIn').click(); };
+  $('photoIn').onchange = async function () {
+    var f = this.files && this.files[0];
+    if (!f) return;
+    try { pendingPhoto = await shrink(f); removePhoto = false; showThumb(pendingPhoto); $('err').textContent = ''; }
+    catch (e) { $('err').textContent = 'Fotoja nuk u hap. Provo një tjetër.'; }
+  };
+  $('thumbDel').onclick = function () { pendingPhoto = null; removePhoto = true; showThumb(null); $('photoIn').value = ''; };
+  $('viewerClose').onclick = function () {
+    $('viewer').hidden = true;
+    if (viewUrl) { URL.revokeObjectURL(viewUrl); viewUrl = null; }
+    $('viewerImg').removeAttribute('src');
+  };
 
   $('cancelEdit').onclick = function () { setEditing(null); };
 
@@ -529,6 +657,7 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
     if (act === 'toggle') { var k = b.getAttribute('data-key'); openGroups[k] = !openGroups[k]; confirmId = null; render(); }
     else if (act === 'ask') { confirmId = b.getAttribute('data-id'); render(); }
     else if (act === 'no') { confirmId = null; render(); }
+    else if (act === 'photo') { openPhoto(b.getAttribute('data-id')); }
     else if (act === 'edit') {
       var eid = b.getAttribute('data-id');
       var et = state.tx.filter(function (t) { return t.id === eid; })[0];
@@ -539,6 +668,7 @@ h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight
       var gone = state.tx.filter(function (t) { return t.id === id; })[0];
       if (gone && gone.recId && state.skip.indexOf(id) < 0) state.skip.push(id);
       if (editingId === id) setEditing(null);
+      if (gone && gone.photo) photoDel(id);
       state.tx = state.tx.filter(function (t) { return t.id !== id; });
       confirmId = null; render(); save();
     }
